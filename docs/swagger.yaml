@@ -1,0 +1,159 @@
+openapi: 3.0.0
+info:
+  title: Payment Gateway Simulator API
+  version: 1.0.0
+  description: Production-like card payment gateway simulator API (tokenize, charge, reference lookup, balance reset).
+servers:
+  - url: http://localhost:3001
+    description: Local development server
+tags:
+  - name: Payment Methods
+    description: Card tokenization endpoints
+  - name: Charges
+    description: Payment authorization and charge processing
+  - name: Reference Data
+    description: Test card lookup and balance reset utilities
+
+paths:
+  /api/payments/methods:
+    post:
+      summary: Tokenize a payment card
+      description: Converts raw card credentials into a reusable paymentMethodId token.
+      tags:
+        - Payment Methods
+      parameters:
+        - in: header
+          name: Accept-Language
+          schema:
+            type: string
+            enum: [en, az, ru]
+            default: en
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TokenizeRequest'
+      responses:
+        '200':
+          description: Token generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenizeResponse'
+        '400':
+          description: Validation or card status error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /api/payments/charges:
+    post:
+      summary: Charge a tokenized payment method
+      description: Charges a payment method token.
+      tags:
+        - Charges
+      parameters:
+        - in: header
+          name: Accept-Language
+          schema:
+            type: string
+            enum: [en, az, ru]
+            default: en
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChargeRequest'
+      responses:
+        '200':
+          description: Transaction completed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChargeSuccessResponse'
+        '402':
+          description: Insufficient funds
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChargeErrorResponse'
+
+  /api/payments/methods/reference:
+    get:
+      summary: List reference test cards
+      tags:
+        - Reference Data
+      responses:
+        '200':
+          description: List of 50 synthetic test cards
+
+  /api/payments/methods/{paymentMethodId}/reset:
+    post:
+      summary: Reset a card balance to seed value
+      tags:
+        - Reference Data
+      parameters:
+        - in: path
+          name: paymentMethodId
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Balance reset successfully
+
+components:
+  schemas:
+    TokenizeRequest:
+      type: object
+      required: [cardNumber, cardHolder, expiryMonth, expiryYear, cvv]
+      properties:
+        cardNumber: { type: string, example: "4539148803436467" }
+        cardHolder: { type: string, example: "DAVID MORENO" }
+        expiryMonth: { type: string, example: "11" }
+        expiryYear: { type: string, example: "2028" }
+        cvv: { type: string, example: "417" }
+    TokenizeResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        paymentMethodId: { type: string, example: "pm_7f3ab21c9e" }
+        brand: { type: string, example: "VISA" }
+        last4: { type: string, example: "6467" }
+        expiryMonth: { type: string, example: "11" }
+        expiryYear: { type: string, example: "2028" }
+    ChargeRequest:
+      type: object
+      required: [paymentMethodId, amount]
+      properties:
+        paymentMethodId: { type: string, example: "pm_7f3ab21c9e" }
+        amount: { type: number, example: 45.50 }
+        currency: { type: string, example: "AZN" }
+    ChargeSuccessResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: true }
+        transactionId: { type: string, example: "txn_c92f1a08e4" }
+        status: { type: string, example: "SUCCESS" }
+        amount: { type: number, example: 45.50 }
+        currency: { type: string, example: "AZN" }
+        remainingBalance: { type: number, example: 796.80 }
+        processedAt: { type: string, format: date-time }
+    ChargeErrorResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: false }
+        errorCode: { type: string, example: "INSUFFICIENT_FUNDS" }
+        message: { type: string, example: "Insufficient funds on the card" }
+        transactionId: { type: string, example: "txn_c92f1a08e5" }
+        status: { type: string, example: "FAILED" }
+        processedAt: { type: string, format: date-time }
+    ErrorResponse:
+      type: object
+      properties:
+        success: { type: boolean, example: false }
+        errorCode: { type: string, example: "CARD_EXPIRED" }
+        message: { type: string, example: "This card has expired" }

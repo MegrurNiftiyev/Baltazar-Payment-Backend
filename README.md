@@ -1,167 +1,136 @@
-# 🏦 Mock Bank Test API
+# 💳 Payment Gateway Simulator — Backend API
 
-A simulated payment provider API (like Stripe/Payriff) for testing payment flows without real cards or real money. Built with Node.js + Express.
+A production-grade Node.js/Express card payment gateway simulator designed for integration testing without a real bank connection or real money.
 
-## Quick Start
+It implements a layered architecture (`routes → controllers → services → models`), Zod request validation, PCI-DSS compliant logging, rate limiting, localization, OpenAPI/Swagger documentation, and centralized error handling matching enterprise payment gateway standards.
+
+> **HTTPS Deployment Note:** This service is designed to sit behind a TLS reverse proxy (e.g. Nginx, Cloudflare, AWS ALB) in non-local environments. In local development, it runs over HTTP.
+
+---
+
+## 1. Setup & Installation
 
 ```bash
+# Install dependencies
 npm install
-npm start        # production
-npm run dev      # development (auto-restart on file changes)
+
+# Setup environment variables
+cp .env.example .env
+
+# Run production server
+npm start
+
+# Run development mode (with --watch auto-reload)
+npm run dev
 ```
 
-Server runs on `http://localhost:3001` (configure with `PORT` env variable).
+The server defaults to `http://localhost:3001`.
+Interactive Swagger UI is available at `http://localhost:3001/api-docs`.
 
 ---
 
-## Endpoints
-
-### `POST /api/mock-bank/tokenize`
-
-Converts card details into a reusable payment token.
-
-**Request:**
-```json
-{
-  "cardNumber": "4242424242424242",
-  "cardHolder": "Test User",
-  "expiryMonth": "12",
-  "expiryYear": "2027",
-  "cvv": "123"
-}
-```
-
-**Success Response:**
-```json
-{
-  "success": true,
-  "paymentMethodId": "pm_test_0001",
-  "brand": "VISA",
-  "last4": "4242",
-  "expiryMonth": "12",
-  "expiryYear": "2027"
-}
-```
-
----
-
-### `POST /api/mock-bank/charge`
-
-Charges a tokenized card.
-
-**Request:**
-```json
-{
-  "paymentMethodId": "pm_test_0001",
-  "amount": 45.50,
-  "currency": "AZN"
-}
-```
-
-**Success Response:**
-```json
-{
-  "success": true,
-  "transactionId": "txn_a1b2c3d4",
-  "status": "SUCCESS",
-  "amount": 45.50,
-  "currency": "AZN",
-  "remainingBalance": 54.50,
-  "processedAt": "2026-07-24T14:32:00.000Z"
-}
-```
-
----
-
-### `GET /api/mock-bank/cards`
-
-Lists all 50 test cards with their current balances (CVV excluded).
-
----
-
-### `POST /api/mock-bank/cards/:paymentMethodId/reset-balance`
-
-Resets a card's balance back to its original seed value.
-
----
-
-## Localization
-
-Set the `Accept-Language` header to get messages in different languages:
-
-| Header | Language |
-|---|---|
-| `en` | English (default) |
-| `az` | Azerbaijani |
-| `ru` | Russian |
-
----
-
-## Test Cards Overview
-
-| Cards | Type | Details |
-|---|---|---|
-| `pm_test_0001` – `pm_test_0015` | Normal (sufficient balance) | Balance 100–5000 AZN, real balance checking |
-| `pm_test_0016` – `pm_test_0023` | Low balance | Balance 1–20 AZN |
-| `pm_test_0024` – `pm_test_0028` | Zero balance | Balance 0 AZN |
-| `pm_test_0029` – `pm_test_0033` | Forced: INSUFFICIENT_FUNDS | Always fails, regardless of balance |
-| `pm_test_0034` – `pm_test_0038` | Expired | Status: EXPIRED |
-| `pm_test_0039` – `pm_test_0042` | Blocked | Status: BLOCKED |
-| `pm_test_0043` – `pm_test_0045` | Stolen / Declined | Status: STOLEN |
-| `pm_test_0046` – `pm_test_0048` | Forced: SUCCESS | Always succeeds, regardless of balance |
-| `pm_test_0049` – `pm_test_0050` | CVV mismatch testing | Normal cards with CVVs `999` and `777` |
-
----
-
-## Error Codes
-
-| errorCode | Description |
-|---|---|
-| `SUCCESS` | Successful transaction |
-| `INSUFFICIENT_FUNDS` | Balance too low |
-| `CARD_EXPIRED` | Card has expired |
-| `CARD_BLOCKED` | Card is blocked |
-| `CARD_DECLINED` | Declined by the bank |
-| `INVALID_CVV` | Wrong CVV submitted |
-| `INVALID_CARD_NUMBER` | Card number format invalid |
-| `CARD_NOT_FOUND` | Card number not in database |
-| `PAYMENT_METHOD_NOT_FOUND` | Token not found |
-| `NETWORK_TIMEOUT` | Simulated network failure (~5% chance) |
-| `AMOUNT_INVALID` | Amount is 0 or negative |
-
----
-
-## Test Scenario Checklist
-
-- [ ] Charge with a sufficiently funded card → `SUCCESS`
-- [ ] Charge a low-balance card for more than its balance → `INSUFFICIENT_FUNDS`
-- [ ] Expired card → `CARD_EXPIRED` (at the tokenize step)
-- [ ] Blocked card → `CARD_BLOCKED`
-- [ ] Wrong CVV → `INVALID_CVV`
-- [ ] Non-existent card number → `CARD_NOT_FOUND`
-- [ ] Card with `forcedResult` → deterministic outcome regardless of balance
-- [ ] Charging the same card multiple times → balance decreases correctly
-- [ ] `Accept-Language: en` / `ru` / `az` → messages change correctly
-- [ ] Random `NETWORK_TIMEOUT` gets triggered (try several times)
-
----
-
-## File Structure
+## 2. Layered Architecture
 
 ```
 Backend-Payment-Test/
-├── server.js                  ← Express entry point
-├── data/
-│   ├── cards.seed.json        ← Original 50 test cards (never modified)
-│   └── cards.json             ← Working copy (balances update here)
-├── locales/
-│   ├── az.json
-│   ├── en.json
-│   └── ru.json
-├── routes/
-│   └── mockBank.js            ← All API route handlers
-├── utils/
-│   ├── cardStore.js           ← JSON read/write helpers
-│   └── localize.js            ← Accept-Language parsing
-└── package.json
+├── server.js                  ← Server entry point (loads env, handles process errors)
+├── .env.example               ← Environment configuration template
+├── docs/
+│   └── swagger.yaml           ← Static OpenAPI 3.0 specification
+├── src/
+│   ├── app.js                 ← Express app initialization & middleware stack
+│   ├── config/
+│   │   ├── env.js             ← Zod environment validator
+│   │   ├── swagger.js         ← Swagger-jsdoc generator
+│   │   └── locales.js         ← Internationalization dictionary loader
+│   ├── controllers/
+│   │   └── paymentController.js ← HTTP adapter (request parsing, response formatting)
+│   ├── errors/
+│   │   └── customErrors.js    ← Typed operational errors (statusCode + errorCode)
+│   ├── middlewares/
+│   │   ├── errorMiddleware.js ← Centralized error handling & translation
+│   │   ├── validateRequest.js ← Zod request body validation factory
+│   │   ├── localizeMiddleware.js ← Accept-Language header parser
+│   │   ├── rateLimitMiddleware.js ← express-rate-limit guard
+│   │   └── requestLogger.js   ← PCI-DSS compliant request logger (PAN masked)
+│   ├── models/
+│   │   ├── cardStore.js       ← Data access object for cards.json (write-locked)
+│   │   └── schemas/
+│   │       ├── tokenizeSchema.js ← Tokenize request Zod schema
+│   │       └── chargeSchema.js   ← Charge request Zod schema
+│   ├── routes/
+│   │   └── paymentRoutes.js   ← Express router with inline Swagger annotations
+│   ├── services/
+│   │   ├── paymentService.js  ← Core business logic (Luhn, status, balance check)
+│   │   └── transactionService.js ← Transaction ID & timestamp generator
+│   ├── locales/
+│   │   ├── en.json            ← English error messages
+│   │   ├── az.json            ← Azerbaijani error messages
+│   │   └── ru.json            ← Russian error messages
+│   ├── data/
+│   │   ├── cards.seed.json    ← Immutable 50 synthetic test cards
+│   │   └── cards.json         ← Working copy (created dynamically on boot)
+│   └── utils/
+│       ├── catchAsync.js      ← Async error wrapper
+│       ├── maskCardNumber.js  ← PCI-DSS card masking (•••• •••• •••• 6467)
+│       ├── generateTransactionId.js ← Transaction ID generator (txn_...)
+│       └── randomFailure.js   ← Simulated transient network failures (~5%)
 ```
+
+---
+
+## 3. Endpoints Overview
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/api/payments/methods` | Tokenize card details into reusable `paymentMethodId` |
+| `POST` | `/api/payments/charges` | Charge a tokenized payment method (Rate limited) |
+| `GET` | `/api/payments/methods/reference` | List all 50 reference cards (CVV excluded) |
+| `POST` | `/api/payments/methods/:id/reset` | Restore card balance to original seed amount |
+| `GET` | `/health` | Server health check |
+| `GET` | `/api-docs` | Interactive Swagger UI API documentation |
+
+---
+
+## 4. Localization (`Accept-Language`)
+
+Send the `Accept-Language` header to localize error messages:
+- `Accept-Language: en` (English - Default)
+- `Accept-Language: az` (Azerbaijani)
+- `Accept-Language: ru` (Russian)
+
+---
+
+## 5. Error Codes & HTTP Status Mapping
+
+| errorCode | HTTP Status | Meaning |
+|---|---|---|
+| `SUCCESS` | `200` | Charge completed successfully |
+| `INSUFFICIENT_FUNDS` | `402` | Card balance is below charge amount |
+| `CARD_EXPIRED` | `400` | Card expiry date has passed |
+| `CARD_BLOCKED` | `403` | Card has been blocked |
+| `CARD_DECLINED` | `403` | Generic bank decline (stolen/flagged) |
+| `INVALID_CVV` | `400` | CVV code does not match card record |
+| `INVALID_CARD_NUMBER` | `400` | Card number fails Luhn checksum or 16-digit format |
+| `CARD_NOT_FOUND` | `404` | Card number not found in database |
+| `PAYMENT_METHOD_NOT_FOUND` | `404` | `paymentMethodId` token not found |
+| `NETWORK_TIMEOUT` | `504` | Simulated transient gateway failure (~5% roll) |
+| `AMOUNT_INVALID` | `400` | Charge amount is zero or negative |
+| `VALIDATION_ERROR` | `400` | Request body failed Zod schema validation |
+| `RATE_LIMITED` | `429` | Exceeded rate limit for charges |
+
+---
+
+## 6. Manual Verification Checklist
+
+- [ ] Tokenize healthy card (`4539148803436467`) → `200 OK` + `paymentMethodId`
+- [ ] Charge healthy card below balance → `200 OK` + balance decreases
+- [ ] Charge healthy card above balance → `402 Payment Required` (`INSUFFICIENT_FUNDS`)
+- [ ] Tokenize expired card (`4000000000000069`) → `400 Bad Request` (`CARD_EXPIRED`)
+- [ ] Tokenize blocked card (`4000000000000127`) → `403 Forbidden` (`CARD_BLOCKED`)
+- [ ] Tokenize with wrong CVV → `400 Bad Request` (`INVALID_CVV`)
+- [ ] Tokenize invalid Luhn number → `400 Bad Request` (`INVALID_CARD_NUMBER`)
+- [ ] `Accept-Language: az` / `ru` → localized error message in response
+- [ ] Reset balance endpoint → restores initial seed balance
+- [ ] `GET /api/payments/methods/reference` → returns cards without CVV
+- [ ] Swagger UI accessible at `/api-docs`
