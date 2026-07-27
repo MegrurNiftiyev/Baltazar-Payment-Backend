@@ -47,6 +47,18 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Card not found in data store
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   /api/payments/charges:
     post:
@@ -74,14 +86,50 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ChargeSuccessResponse'
+        '400':
+          description: Invalid amount or validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChargeErrorResponse'
         '402':
           description: Insufficient funds
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ChargeErrorResponse'
+        '403':
+          description: Card blocked or declined
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChargeErrorResponse'
+        '404':
+          description: Payment method not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChargeErrorResponse'
+        '429':
+          description: Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChargeErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChargeErrorResponse'
+        '504':
+          description: Simulated random network timeout
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ChargeErrorResponse'
 
-  /api/payments/methods/reference:
+  /api/payments/test-cards:
     get:
       summary: List reference test cards
       tags:
@@ -89,21 +137,36 @@ paths:
       responses:
         '200':
           description: List of 50 synthetic test cards
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TestCardsResponse'
 
-  /api/payments/methods/{paymentMethodId}/reset:
+
+  /api/payments/test-cards/reset-all:
     post:
-      summary: Reset a card balance to seed value
+      summary: Reset all test cards to seed values
+      description: Restores every test card's balance and state to its original seed data in one call.
       tags:
         - Reference Data
-      parameters:
-        - in: path
-          name: paymentMethodId
-          required: true
-          schema:
-            type: string
       responses:
         '200':
-          description: Balance reset successfully
+          description: All cards reset successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  resetCount:
+                    type: integer
+                    example: 50
+                  message:
+                    type: string
+                    example: All test card balances restored to seed values
+
 
 components:
   schemas:
@@ -111,7 +174,7 @@ components:
       type: object
       required: [cardNumber, cardHolder, expiryMonth, expiryYear, cvv]
       properties:
-        cardNumber: { type: string, example: "4539148803436467" }
+        cardNumber: { type: string, example: "4539974024498311" }
         cardHolder: { type: string, example: "DAVID MORENO" }
         expiryMonth: { type: string, example: "11" }
         expiryYear: { type: string, example: "2028" }
@@ -122,16 +185,17 @@ components:
         success: { type: boolean, example: true }
         paymentMethodId: { type: string, example: "pm_7f3ab21c9e" }
         brand: { type: string, example: "VISA" }
-        last4: { type: string, example: "6467" }
+        last4: { type: string, example: "8311" }
         expiryMonth: { type: string, example: "11" }
         expiryYear: { type: string, example: "2028" }
+
     ChargeRequest:
       type: object
       required: [paymentMethodId, amount]
       properties:
         paymentMethodId: { type: string, example: "pm_7f3ab21c9e" }
         amount: { type: number, example: 45.50 }
-        currency: { type: string, example: "AZN" }
+        currency: { type: string, default: "AZN", example: "AZN" }
     ChargeSuccessResponse:
       type: object
       properties:
@@ -139,8 +203,7 @@ components:
         transactionId: { type: string, example: "txn_c92f1a08e4" }
         status: { type: string, example: "SUCCESS" }
         amount: { type: number, example: 45.50 }
-        currency: { type: string, example: "AZN" }
-        remainingBalance: { type: number, example: 796.80 }
+        currency: { type: string, default: "AZN", example: "AZN" }
         processedAt: { type: string, format: date-time }
     ChargeErrorResponse:
       type: object
@@ -157,3 +220,24 @@ components:
         success: { type: boolean, example: false }
         errorCode: { type: string, example: "CARD_EXPIRED" }
         message: { type: string, example: "This card has expired" }
+    CardReference:
+      type: object
+      properties:
+        cardNumber: { type: string, example: "4539974024498311" }
+        paymentMethodId: { type: string, example: "pm_7f3ab21c9e" }
+        cardHolder: { type: string, example: "DAVID MORENO" }
+        brand: { type: string, example: "VISA" }
+        last4: { type: string, example: "8311" }
+        expiryMonth: { type: string, example: "11" }
+        expiryYear: { type: string, example: "2028" }
+        balance: { type: number, example: 842.30 }
+        currency: { type: string, default: "AZN", example: "AZN" }
+        status: { type: string, example: "ACTIVE" }
+        forcedResult: { type: string, nullable: true, example: null }
+    TestCardsResponse:
+      type: object
+      properties:
+        cards:
+          type: array
+          items:
+            $ref: '#/components/schemas/CardReference'

@@ -5,8 +5,6 @@ const dataDir = path.join(__dirname, '..', 'data');
 const cardsPath = path.join(dataDir, 'cards.json');
 const seedPath = path.join(dataDir, 'cards.seed.json');
 
-let writeLock = false;
-
 const ensureDataFile = () => {
   if (!fs.existsSync(cardsPath)) {
     if (fs.existsSync(seedPath)) {
@@ -25,15 +23,7 @@ const readCards = () => {
 };
 
 const writeCards = (cards) => {
-  while (writeLock) {
-    // In-process lock wait
-  }
-  writeLock = true;
-  try {
-    fs.writeFileSync(cardsPath, JSON.stringify(cards, null, 2), 'utf-8');
-  } finally {
-    writeLock = false;
-  }
+  fs.writeFileSync(cardsPath, JSON.stringify(cards, null, 2), 'utf-8');
 };
 
 const findByCardNumber = (cardNumber) => {
@@ -46,31 +36,37 @@ const findByPaymentMethodId = (paymentMethodId) => {
   return cards.find((c) => c.paymentMethodId === paymentMethodId) || null;
 };
 
+const { toMajorUnits } = require('../utils/money');
+
 const updateBalance = (paymentMethodId, newBalance) => {
   const cards = readCards();
   const card = cards.find((c) => c.paymentMethodId === paymentMethodId);
   if (card) {
-    card.balance = Math.round(newBalance * 100) / 100;
+    card.balance = Math.round(newBalance);
     writeCards(cards);
   }
   return card;
 };
 
-const getOriginalSeedCard = (paymentMethodId) => {
-  if (!fs.existsSync(seedPath)) return null;
-  const seed = JSON.parse(fs.readFileSync(seedPath, 'utf-8'));
-  return seed.find((c) => c.paymentMethodId === paymentMethodId) || null;
-};
-
-const resetBalance = (paymentMethodId) => {
-  const seedCard = getOriginalSeedCard(paymentMethodId);
-  if (!seedCard) return null;
-  return updateBalance(paymentMethodId, seedCard.balance);
+const resetAllBalances = () => {
+  if (!fs.existsSync(seedPath)) {
+    throw new Error('cards.seed.json missing — cannot reset data layer');
+  }
+  const seedContent = fs.readFileSync(seedPath, 'utf-8');
+  fs.writeFileSync(cardsPath, seedContent, 'utf-8');
+  const cards = JSON.parse(seedContent);
+  return cards.map(({ cvv, ...rest }) => ({
+    ...rest,
+    balance: typeof rest.balance === 'number' ? toMajorUnits(rest.balance) : rest.balance
+  }));
 };
 
 const listAll = () => {
   const cards = readCards();
-  return cards.map(({ cvv, ...rest }) => rest);
+  return cards.map(({ cvv, ...rest }) => ({
+    ...rest,
+    balance: typeof rest.balance === 'number' ? toMajorUnits(rest.balance) : rest.balance
+  }));
 };
 
 module.exports = {
@@ -78,6 +74,7 @@ module.exports = {
   findByCardNumber,
   findByPaymentMethodId,
   updateBalance,
-  resetBalance,
+  resetAllBalances,
   listAll,
 };
+

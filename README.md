@@ -72,7 +72,7 @@ Backend-Payment-Test/
 │   │   └── cards.json         ← Working copy (created dynamically on boot)
 │   └── utils/
 │       ├── catchAsync.js      ← Async error wrapper
-│       ├── maskCardNumber.js  ← PCI-DSS card masking (•••• •••• •••• 6467)
+│       ├── maskCardNumber.js  ← PCI-DSS card masking (•••• •••• •••• 8311)
 │       ├── generateTransactionId.js ← Transaction ID generator (txn_...)
 │       └── randomFailure.js   ← Simulated transient network failures (~5%)
 ```
@@ -85,8 +85,8 @@ Backend-Payment-Test/
 |---|---|---|
 | `POST` | `/api/payments/methods` | Tokenize card details into reusable `paymentMethodId` |
 | `POST` | `/api/payments/charges` | Charge a tokenized payment method (Rate limited) |
-| `GET` | `/api/payments/methods/reference` | List all 50 reference cards (CVV excluded) |
-| `POST` | `/api/payments/methods/:id/reset` | Restore card balance to original seed amount |
+| `GET` | `/api/payments/test-cards` | List all 50 reference cards (CVV excluded) |
+| `POST` | `/api/payments/test-cards/reset-all` | Restore all test card balances and states to seed values |
 | `GET` | `/health` | Server health check |
 | `GET` | `/api-docs` | Interactive Swagger UI API documentation |
 
@@ -123,14 +123,18 @@ Send the `Accept-Language` header to localize error messages:
 
 ## 6. Manual Verification Checklist
 
-- [ ] Tokenize healthy card (`4539148803436467`) → `200 OK` + `paymentMethodId`
+- [ ] Tokenize healthy card (`4539974024498311`) → `200 OK` + `paymentMethodId`
 - [ ] Charge healthy card below balance → `200 OK` + balance decreases
 - [ ] Charge healthy card above balance → `402 Payment Required` (`INSUFFICIENT_FUNDS`)
-- [ ] Tokenize expired card (`4000000000000069`) → `400 Bad Request` (`CARD_EXPIRED`)
-- [ ] Tokenize blocked card (`4000000000000127`) → `403 Forbidden` (`CARD_BLOCKED`)
+- [ ] Tokenize expired card → `400 Bad Request` (`CARD_EXPIRED`)
+- [ ] Tokenize blocked card → `403 Forbidden` (`CARD_BLOCKED`)
 - [ ] Tokenize with wrong CVV → `400 Bad Request` (`INVALID_CVV`)
+- [ ] Tokenize valid card + CVV but wrong expiry date → `404 Not Found` (`CARD_NOT_FOUND`)
 - [ ] Tokenize invalid Luhn number → `400 Bad Request` (`INVALID_CARD_NUMBER`)
 - [ ] `Accept-Language: az` / `ru` → localized error message in response
-- [ ] Reset balance endpoint → restores initial seed balance
-- [ ] `GET /api/payments/methods/reference` → returns cards without CVV
+- [ ] Deplete several different cards, call `POST /api/payments/test-cards/reset-all` once → every card's balance and status is back to its seed value
+- [ ] `GET /api/payments/test-cards` → returns cards without CVV
 - [ ] Swagger UI accessible at `/api-docs`
+
+
+

@@ -1,10 +1,10 @@
 const { AppError } = require('../errors/customErrors');
-const generateTransactionId = require('../utils/generateTransactionId');
 
 /**
  * Centralized error handling middleware.
  * Catches all thrown errors and returns consistent { success: false, errorCode, message } shape.
  * Translates message using req.t(errorCode) based on Accept-Language.
+ * Preserves transactionId and processedAt attached by paymentService.charge when a charge attempt fails.
  */
 const errorMiddleware = (err, req, res, next) => {
   if (res.headersSent) {
@@ -21,11 +21,11 @@ const errorMiddleware = (err, req, res, next) => {
       message: t(err.errorCode) || err.message
     };
 
-    // For charge endpoint errors, attach transaction tracking metadata
-    if (req.originalUrl && req.originalUrl.includes('/charges')) {
-      response.transactionId = generateTransactionId();
+    // Attach transaction metadata ONLY if an actual transaction attempt was created in paymentService.charge
+    if (err.transactionId) {
+      response.transactionId = err.transactionId;
       response.status = 'FAILED';
-      response.processedAt = new Date().toISOString();
+      response.processedAt = err.processedAt || new Date().toISOString();
     }
 
     return res.status(err.statusCode).json(response);

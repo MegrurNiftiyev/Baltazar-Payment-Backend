@@ -1,6 +1,7 @@
 const cardStore = require('../models/cardStore');
 const transactionService = require('./transactionService');
 const maybeFailRandomly = require('../utils/randomFailure');
+const { toMinorUnits } = require('../utils/money');
 const {
   InvalidCardNumberError,
   CardNotFoundError,
@@ -31,7 +32,7 @@ const validateLuhn = (cardNumber) => {
 
 class PaymentService {
   tokenize(data) {
-    const { cardNumber, cvv } = data;
+    const { cardNumber, expiryMonth, expiryYear, cvv } = data;
 
     // 1. Luhn validation
     if (!validateLuhn(cardNumber)) {
@@ -47,6 +48,11 @@ class PaymentService {
     // 3. CVV match
     if (card.cvv !== cvv) {
       throw new InvalidCvvError();
+    }
+
+    // 3b. Expiry date match check (Bug 7 fix)
+    if (card.expiryMonth !== expiryMonth || card.expiryYear !== expiryYear) {
+      throw new CardNotFoundError();
     }
 
     // 4. Status checks
@@ -74,97 +80,102 @@ class PaymentService {
     const { paymentMethodId, amount, currency } = data;
     const txn = transactionService.createTransaction();
 
-    // 1. Amount check
-    if (amount <= 0) {
-      throw new AmountInvalidError();
-    }
-
-    // 2. Payment method lookup
-    const card = cardStore.findByPaymentMethodId(paymentMethodId);
-    if (!card) {
-      throw new PaymentMethodNotFoundError();
-    }
-
-    // 3. Forced result short-circuit
-    if (card.forcedResult) {
-      if (card.forcedResult === 'SUCCESS') {
-        const newBalance = Math.round((card.balance - amount) * 100) / 100;
-        cardStore.updateBalance(paymentMethodId, newBalance);
-
-        return {
-          success: true,
-          transactionId: txn.transactionId,
-          status: 'SUCCESS',
-          amount,
-          currency: currency || card.currency,
-          remainingBalance: newBalance,
-          processedAt: txn.processedAt
-        };
+    try {
+      // 1. Amount check
+      if (amount <= 0) {
+        throw new AmountInvalidError();
       }
 
-      if (card.forcedResult === 'INSUFFICIENT_FUNDS') {
-        throw new InsufficientFundsError();
+      // Convert major units amount to minor units (integer cents/qəpik)
+      const amountMinor = toMinorUnits(amount);
+
+      // 2. Payment method lookup
+      const card = cardStore.findByPaymentMethodId(paymentMethodId);
+      if (!card) {
+        throw new PaymentMethodNotFoundError();
       }
-      if (card.forcedResult === 'CARD_BLOCKED') {
+
+      // 3. Forced result short-circuit
+      if (card.forcedResult) {
+        if (card.forcedResult === 'SUCCESS') {
+          const newBalance = card.balance - amountMinor;
+          cardStore.updateBalance(paymentMethodId, newBalance);
+
+          return {
+            success: true,
+            transactionId: txn.transactionId,
+            status: 'SUCCESS',
+            amount,
+            currency: currency || card.currency,
+            processedAt: txn.processedAt
+          };
+        }
+
+        if (card.forcedResult === 'INSUFFICIENT_FUNDS') {
+          throw new InsufficientFundsError();
+        }
+        if (card.forcedResult === 'CARD_BLOCKED') {
+          throw new CardBlockedError();
+        }
+        if (card.forcedResult === 'CARD_DECLINED') {
+          throw new CardDeclinedError();
+        }
+      }
+
+      // 4. Card status checks
+      if (card.status === 'EXPIRED') {
+        throw new CardExpiredError();
+      }
+      if (card.status === 'BLOCKED') {
         throw new CardBlockedError();
       }
-      if (card.forcedResult === 'CARD_DECLINED') {
+      if (card.status === 'STOLEN') {
         throw new CardDeclinedError();
       }
-    }
 
-    // 4. Card status checks
-    if (card.status === 'EXPIRED') {
-      throw new CardExpiredError();
-    }
-    if (card.status === 'BLOCKED') {
-      throw new CardBlockedError();
-    }
-    if (card.status === 'STOLEN') {
-      throw new CardDeclinedError();
-    }
+      // 5. Random network failure injection
+      maybeFailRandomly();
 
-    // 5. Random network failure injection
-    maybeFailRandomly();
+      // 6. Balance check
+      if (card.balance < amountMinor) {
+        throw new InsufficientFundsError();
+      }
 
-    // 6. Balance check
-    if (card.balance < amount) {
-      throw new InsufficientFundsError();
+      // 7. Deduct and persist
+      const newBalance = card.balance - amountMinor;
+      cardStore.updateBalance(paymentMethodId, newBalance);
+
+      return {
+        success: true,
+        transactionId: txn.transactionId,
+        status: 'SUCCESS',
+        amount,
+        currency: currency || card.currency,
+        processedAt: txn.processedAt
+      };
+    } catch (err) {
+      err.transactionId = txn.transactionId;
+      err.processedAt = txn.processedAt;
+      throw err;
     }
-
-    // 7. Deduct and persist
-    const newBalance = Math.round((card.balance - amount) * 100) / 100;
-    cardStore.updateBalance(paymentMethodId, newBalance);
-
-    return {
-      success: true,
-      transactionId: txn.transactionId,
-      status: 'SUCCESS',
-      amount,
-      currency: currency || card.currency,
-      remainingBalance: newBalance,
-      processedAt: txn.processedAt
-    };
   }
 
-  listMethods() {
+  listTestCards() {
     return {
       cards: cardStore.listAll()
     };
   }
 
-  resetMethod(paymentMethodId) {
-    const card = cardStore.resetBalance(paymentMethodId);
-    if (!card) {
-      throw new PaymentMethodNotFoundError();
-    }
+
+  resetAllMethods() {
+    const cards = cardStore.resetAllBalances();
     return {
       success: true,
-      paymentMethodId: card.paymentMethodId,
-      balance: card.balance,
-      message: 'Balance reset to original seed value'
+      resetCount: cards.length,
+      message: 'All test card balances restored to seed values'
     };
   }
 }
 
 module.exports = new PaymentService();
+

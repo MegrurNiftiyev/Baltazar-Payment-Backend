@@ -4,6 +4,7 @@ const helmet = require('helmet');
 const hpp = require('hpp');
 const swaggerUi = require('swagger-ui-express');
 
+const { getEnv } = require('./config/env');
 const swaggerSpec = require('./config/swagger');
 const paymentRoutes = require('./routes/paymentRoutes');
 const requestLogger = require('./middlewares/requestLogger');
@@ -12,8 +13,9 @@ const errorMiddleware = require('./middlewares/errorMiddleware');
 const cardStore = require('./models/cardStore');
 
 const app = express();
+const env = getEnv();
 
-const allowedOrigins = (process.env.CORS_ALLOWED_ORIGINS || '*')
+const allowedOrigins = (env.CORS_ALLOWED_ORIGINS || '*')
   .split(',')
   .map((origin) => origin.trim())
   .filter(Boolean);
@@ -43,7 +45,7 @@ app.use(localizeMiddleware);
 // Initialize data layer
 cardStore.ensureDataFile();
 
-// Swagger Documentation (available in dev mode or default)
+// Swagger Documentation
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // Health check endpoint

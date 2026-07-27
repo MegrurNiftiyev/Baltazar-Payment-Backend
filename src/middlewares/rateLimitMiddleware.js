@@ -1,9 +1,12 @@
 const rateLimit = require('express-rate-limit');
+const { getEnv } = require('../config/env');
 const { RateLimitedError } = require('../errors/customErrors');
 
+const env = getEnv();
+
 const rateLimitMiddleware = rateLimit({
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '60000', 10),
-  limit: parseInt(process.env.RATE_LIMIT_MAX || '100', 10),
+  windowMs: env.RATE_LIMIT_WINDOW_MS,
+  limit: env.RATE_LIMIT_MAX,
   standardHeaders: true,
   legacyHeaders: false,
   handler: (req, res, next) => {

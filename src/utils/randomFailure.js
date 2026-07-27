@@ -1,3 +1,4 @@
+const { getEnv } = require('../config/env');
 const { NetworkTimeoutError } = require('../errors/customErrors');
 
 /**
@@ -6,7 +7,8 @@ const { NetworkTimeoutError } = require('../errors/customErrors');
  * Can be disabled via DISABLE_RANDOM_FAILURES=true env var.
  */
 const maybeFailRandomly = () => {
-  if (process.env.DISABLE_RANDOM_FAILURES === 'true') {
+  const env = getEnv();
+  if (env.DISABLE_RANDOM_FAILURES === 'true') {
     return;
   }
 

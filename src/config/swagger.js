@@ -39,7 +39,7 @@ const swaggerDefinition = {
         type: 'object',
         required: ['cardNumber', 'cardHolder', 'expiryMonth', 'expiryYear', 'cvv'],
         properties: {
-          cardNumber: { type: 'string', example: '4539148803436467' },
+          cardNumber: { type: 'string', example: '4539974024498311' },
           cardHolder: { type: 'string', example: 'DAVID MORENO' },
           expiryMonth: { type: 'string', example: '11' },
           expiryYear: { type: 'string', example: '2028' },
@@ -52,7 +52,7 @@ const swaggerDefinition = {
           success: { type: 'boolean', example: true },
           paymentMethodId: { type: 'string', example: 'pm_7f3ab21c9e' },
           brand: { type: 'string', example: 'VISA' },
-          last4: { type: 'string', example: '6467' },
+          last4: { type: 'string', example: '8311' },
           expiryMonth: { type: 'string', example: '11' },
           expiryYear: { type: 'string', example: '2028' }
         }
@@ -63,7 +63,7 @@ const swaggerDefinition = {
         properties: {
           paymentMethodId: { type: 'string', example: 'pm_7f3ab21c9e' },
           amount: { type: 'number', example: 45.50 },
-          currency: { type: 'string', example: 'AZN' }
+          currency: { type: 'string', default: 'AZN', example: 'AZN' }
         }
       },
       ChargeSuccessResponse: {
@@ -73,8 +73,7 @@ const swaggerDefinition = {
           transactionId: { type: 'string', example: 'txn_c92f1a08e4' },
           status: { type: 'string', example: 'SUCCESS' },
           amount: { type: 'number', example: 45.50 },
-          currency: { type: 'string', example: 'AZN' },
-          remainingBalance: { type: 'number', example: 796.80 },
+          currency: { type: 'string', default: 'AZN', example: 'AZN' },
           processedAt: { type: 'string', format: 'date-time' }
         }
       },
@@ -100,19 +99,31 @@ const swaggerDefinition = {
       CardReference: {
         type: 'object',
         properties: {
-          cardNumber: { type: 'string', example: '4539148803436467' },
+          cardNumber: { type: 'string', example: '4539974024498311' },
           paymentMethodId: { type: 'string', example: 'pm_7f3ab21c9e' },
           cardHolder: { type: 'string', example: 'DAVID MORENO' },
           brand: { type: 'string', example: 'VISA' },
-          last4: { type: 'string', example: '6467' },
+          last4: { type: 'string', example: '8311' },
           expiryMonth: { type: 'string', example: '11' },
           expiryYear: { type: 'string', example: '2028' },
           balance: { type: 'number', example: 842.30 },
-          currency: { type: 'string', example: 'AZN' },
+          currency: { type: 'string', default: 'AZN', example: 'AZN' },
           status: { type: 'string', example: 'ACTIVE' },
           forcedResult: { type: 'string', nullable: true, example: null }
         }
+      },
+      TestCardsResponse: {
+        type: 'object',
+        properties: {
+          cards: {
+            type: 'array',
+            items: {
+              $ref: '#/components/schemas/CardReference'
+            }
+          }
+        }
       }
+
     }
   }
 };

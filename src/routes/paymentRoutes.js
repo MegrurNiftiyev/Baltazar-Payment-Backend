@@ -53,6 +53,12 @@ const chargeSchema = require('../models/schemas/chargeSchema');
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ErrorResponse'
  */
 router.post(
   '/methods',
@@ -119,6 +125,12 @@ router.post(
  *           application/json:
  *             schema:
  *               $ref: '#/components/schemas/ChargeErrorResponse'
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ChargeErrorResponse'
  *       504:
  *         description: Simulated random network timeout
  *         content:
@@ -135,7 +147,7 @@ router.post(
 
 /**
  * @swagger
- * /api/payments/methods/reference:
+ * /api/payments/test-cards:
  *   get:
  *     summary: List all reference test cards (debug/development only)
  *     description: Returns the list of 50 synthetic test cards with balances and statuses. Excludes CVV for PCI compliance simulation.
@@ -147,36 +159,25 @@ router.post(
  *         content:
  *           application/json:
  *             schema:
- *               type: object
- *               properties:
- *                 cards:
- *                   type: array
- *                   items:
- *                     $ref: '#/components/schemas/CardReference'
+ *               $ref: '#/components/schemas/TestCardsResponse'
  */
 router.get(
-  '/methods/reference',
-  paymentController.listMethods
+  '/test-cards',
+  paymentController.listTestCards
 );
+
 
 /**
  * @swagger
- * /api/payments/methods/{paymentMethodId}/reset:
+ * /api/payments/test-cards/reset-all:
  *   post:
- *     summary: Reset a card balance to its seed value
- *     description: Restores a synthetic card's virtual balance to its initial seed amount for repeated testing.
+ *     summary: Reset all test cards to their seed values
+ *     description: Restores every test card's balance and state to its original seed data in one call. Does not accept a target card — always resets the full dataset.
  *     tags:
  *       - Reference Data
- *     parameters:
- *       - in: path
- *         name: paymentMethodId
- *         required: true
- *         schema:
- *           type: string
- *         description: The payment method ID to reset
  *     responses:
  *       200:
- *         description: Balance reset successfully
+ *         description: All cards reset successfully
  *         content:
  *           application/json:
  *             schema:
@@ -185,25 +186,17 @@ router.get(
  *                 success:
  *                   type: boolean
  *                   example: true
- *                 paymentMethodId:
- *                   type: string
- *                   example: pm_7f3ab21c9e
- *                 balance:
- *                   type: number
- *                   example: 842.30
+ *                 resetCount:
+ *                   type: integer
+ *                   example: 50
  *                 message:
  *                   type: string
- *                   example: Balance reset to original seed value
- *       404:
- *         description: Payment method not found
- *         content:
- *           application/json:
- *             schema:
- *               $ref: '#/components/schemas/ErrorResponse'
+ *                   example: All test card balances restored to seed values
  */
 router.post(
-  '/methods/:paymentMethodId/reset',
-  paymentController.resetMethod
+  '/test-cards/reset-all',
+  paymentController.resetAllMethods
 );
 
 module.exports = router;
+

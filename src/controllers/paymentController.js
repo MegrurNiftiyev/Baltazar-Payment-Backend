@@ -12,15 +12,17 @@ class PaymentController {
     return res.status(200).json(result);
   });
 
-  listMethods = catchAsync(async (req, res) => {
-    const result = paymentService.listMethods();
+  listTestCards = catchAsync(async (req, res) => {
+    const result = paymentService.listTestCards();
     return res.status(200).json(result);
   });
 
-  resetMethod = catchAsync(async (req, res) => {
-    const result = paymentService.resetMethod(req.params.paymentMethodId);
+
+  resetAllMethods = catchAsync(async (req, res) => {
+    const result = paymentService.resetAllMethods();
     return res.status(200).json(result);
   });
 }
 
 module.exports = new PaymentController();
+

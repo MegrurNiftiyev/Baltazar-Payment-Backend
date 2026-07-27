@@ -1,6 +1,6 @@
 /**
- * Masks a card number for safe logging.
- * "4539148803436467" → "•••• •••• •••• 6467"
+ * Masks 16-digit card number according to PCI-DSS display guidelines.
+ * "4539974024498311" → "•••• •••• •••• 8311"
  */
 const maskCardNumber = (cardNumber) => {
   if (!cardNumber || cardNumber.length < 4) {

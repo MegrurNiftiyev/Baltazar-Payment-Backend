@@ -1,13 +1,15 @@
 const { z } = require('zod');
 
 const envSchema = z.object({
-  NODE_ENV: z.string().default('development'),
-  PORT: z.string().default('3001'),
-  RATE_LIMIT_WINDOW_MS: z.string().default('60000'),
-  RATE_LIMIT_MAX: z.string().default('100'),
+  NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+  PORT: z.coerce.number().int().min(1).max(65535).default(3001),
+  RATE_LIMIT_WINDOW_MS: z.coerce.number().int().positive().default(60000),
+  RATE_LIMIT_MAX: z.coerce.number().int().positive().default(100),
   CORS_ALLOWED_ORIGINS: z.string().default('*'),
-  DISABLE_RANDOM_FAILURES: z.string().default('false')
+  DISABLE_RANDOM_FAILURES: z.enum(['true', 'false']).default('false')
 });
+
+let parsedEnv = null;
 
 const validateEnv = () => {
   const result = envSchema.safeParse(process.env);
@@ -20,7 +22,15 @@ const validateEnv = () => {
     throw new Error(`Invalid environment configuration: ${issues}`);
   }
 
+  parsedEnv = result.data;
   return result.data;
 };
 
-module.exports = validateEnv;
+const getEnv = () => {
+  if (!parsedEnv) {
+    return validateEnv();
+  }
+  return parsedEnv;
+};
+
+module.exports = { validateEnv, getEnv };

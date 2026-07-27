@@ -2,10 +2,10 @@ const { z } = require('zod');
 
 const chargeSchema = z.object({
   paymentMethodId: z
-    .string({ required_error: 'paymentMethodId is required' })
+    .string({ message: 'paymentMethodId is required' })
     .min(1, 'paymentMethodId cannot be empty'),
   amount: z
-    .number({ required_error: 'amount is required' })
+    .number({ message: 'amount is required' })
     .positive('amount must be greater than zero'),
   currency: z
     .string()
