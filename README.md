@@ -8,28 +8,150 @@ It implements a layered architecture (`routes → controllers → services → m
 
 ---
 
-## 1. Setup & Installation
+## 1. Screenshots
 
-```bash
-# Install dependencies
-npm install
-
-# Setup environment variables
-cp .env.example .env
-
-# Run production server
-npm start
-
-# Run development mode (with --watch auto-reload)
-npm run dev
-```
-
-The server defaults to `http://localhost:3001`.
-Interactive Swagger UI is available at `http://localhost:3001/api-docs`.
+![Swagger UI API Documentation](screenshots/payment-backend-swager-screenshot.png)
 
 ---
 
-## 2. Layered Architecture
+## 2. Endpoints & Schema Examples
+
+### `POST /api/payments/methods`
+
+Tokenizes card details into a reusable `paymentMethodId` token after performing Luhn validation, status checks, and CVV verification.
+
+#### Request Example (`TokenizeRequest`)
+```json
+{
+  "cardNumber": "4539974024498311",
+  "cardHolder": "DAVID MORENO",
+  "expiryMonth": "11",
+  "expiryYear": "2028",
+  "cvv": "417"
+}
+```
+
+#### Response Examples
+
+##### `200 OK` — Success (`TokenizeResponse`)
+```json
+{
+  "success": true,
+  "paymentMethodId": "pm_7f3ab21c9e",
+  "brand": "VISA",
+  "last4": "8311",
+  "expiryMonth": "11",
+  "expiryYear": "2028"
+}
+```
+
+##### `400 / 403 / 404 / 500` — Error (`ErrorResponse`)
+```json
+{
+  "success": false,
+  "errorCode": "CARD_EXPIRED",
+  "message": "This card has expired"
+}
+```
+
+---
+
+### `POST /api/payments/charges`
+
+Charges a tokenized payment method. Internal calculations are processed strictly in integer minor units (qəpik/cents).
+
+#### Request Example (`ChargeRequest`)
+```json
+{
+  "paymentMethodId": "pm_7f3ab21c9e",
+  "amount": 45.50,
+  "currency": "AZN"
+}
+```
+
+#### Response Examples
+
+##### `200 OK` — Success (`ChargeSuccessResponse`)
+```json
+{
+  "success": true,
+  "transactionId": "txn_c92f1a08e4",
+  "status": "SUCCESS",
+  "amount": 45.50,
+  "currency": "AZN",
+  "processedAt": "2026-07-27T14:06:29.000Z"
+}
+```
+
+##### `400 / 402 / 403 / 404 / 429 / 500 / 504` — Error (`ChargeErrorResponse`)
+```json
+{
+  "success": false,
+  "errorCode": "INSUFFICIENT_FUNDS",
+  "message": "Insufficient funds on the card",
+  "transactionId": "txn_c92f1a08e5",
+  "status": "FAILED",
+  "processedAt": "2026-07-27T14:06:29.000Z"
+}
+```
+
+---
+
+### `GET /api/payments/test-cards`
+
+Returns the list of 50 synthetic reference test cards with balances and statuses. Excludes CVV for PCI compliance.
+
+#### Response Example (`TestCardsResponse`)
+```json
+{
+  "cards": [
+    {
+      "cardNumber": "4539974024498311",
+      "paymentMethodId": "pm_7f3ab21c9e",
+      "cardHolder": "DAVID MORENO",
+      "brand": "VISA",
+      "last4": "8311",
+      "expiryMonth": "11",
+      "expiryYear": "2028",
+      "balance": 842.30,
+      "currency": "AZN",
+      "status": "ACTIVE",
+      "forcedResult": null
+    }
+  ]
+}
+```
+
+---
+
+### `POST /api/payments/test-cards/reset-all`
+
+Restores every test card's balance, status, and forced result to original seed data values.
+
+#### Response Example
+```json
+{
+  "success": true,
+  "resetCount": 50,
+  "message": "All test card balances restored to seed values"
+}
+```
+
+---
+
+### `GET /health`
+
+#### Response Example
+```json
+{
+  "success": true,
+  "message": "Payment Gateway Simulator is running"
+}
+```
+
+---
+
+## 3. Layered Architecture & Directory Structure
 
 ```
 Backend-Payment-Test/
@@ -37,6 +159,10 @@ Backend-Payment-Test/
 ├── .env.example               ← Environment configuration template
 ├── docs/
 │   └── swagger.yaml           ← Static OpenAPI 3.0 specification
+├── screenshots/
+│   └── payment-backend-swager-screenshot.png ← Swagger UI Screenshot
+├── scripts/
+│   └── verifyLuhn.js          ← Seed data Luhn validator script
 ├── src/
 │   ├── app.js                 ← Express app initialization & middleware stack
 │   ├── config/
@@ -59,7 +185,7 @@ Backend-Payment-Test/
 │   │       ├── tokenizeSchema.js ← Tokenize request Zod schema
 │   │       └── chargeSchema.js   ← Charge request Zod schema
 │   ├── routes/
-│   │   └── paymentRoutes.js   ← Express router with inline Swagger annotations
+│   │   └── paymentRoutes.js   ← Express router with OpenAPI annotations
 │   ├── services/
 │   │   ├── paymentService.js  ← Core business logic (Luhn, status, balance check)
 │   │   └── transactionService.js ← Transaction ID & timestamp generator
@@ -71,24 +197,12 @@ Backend-Payment-Test/
 │   │   ├── cards.seed.json    ← Immutable 50 synthetic test cards
 │   │   └── cards.json         ← Working copy (created dynamically on boot)
 │   └── utils/
+│       ├── money.js           ← Minor/major unit precision currency converter
 │       ├── catchAsync.js      ← Async error wrapper
 │       ├── maskCardNumber.js  ← PCI-DSS card masking (•••• •••• •••• 8311)
 │       ├── generateTransactionId.js ← Transaction ID generator (txn_...)
 │       └── randomFailure.js   ← Simulated transient network failures (~5%)
 ```
-
----
-
-## 3. Endpoints Overview
-
-| Method | Endpoint | Description |
-|---|---|---|
-| `POST` | `/api/payments/methods` | Tokenize card details into reusable `paymentMethodId` |
-| `POST` | `/api/payments/charges` | Charge a tokenized payment method (Rate limited) |
-| `GET` | `/api/payments/test-cards` | List all 50 reference cards (CVV excluded) |
-| `POST` | `/api/payments/test-cards/reset-all` | Restore all test card balances and states to seed values |
-| `GET` | `/health` | Server health check |
-| `GET` | `/api-docs` | Interactive Swagger UI API documentation |
 
 ---
 
@@ -121,20 +235,21 @@ Send the `Accept-Language` header to localize error messages:
 
 ---
 
-## 6. Manual Verification Checklist
+## 6. Setup & Installation
 
-- [ ] Tokenize healthy card (`4539974024498311`) → `200 OK` + `paymentMethodId`
-- [ ] Charge healthy card below balance → `200 OK` + balance decreases
-- [ ] Charge healthy card above balance → `402 Payment Required` (`INSUFFICIENT_FUNDS`)
-- [ ] Tokenize expired card → `400 Bad Request` (`CARD_EXPIRED`)
-- [ ] Tokenize blocked card → `403 Forbidden` (`CARD_BLOCKED`)
-- [ ] Tokenize with wrong CVV → `400 Bad Request` (`INVALID_CVV`)
-- [ ] Tokenize valid card + CVV but wrong expiry date → `404 Not Found` (`CARD_NOT_FOUND`)
-- [ ] Tokenize invalid Luhn number → `400 Bad Request` (`INVALID_CARD_NUMBER`)
-- [ ] `Accept-Language: az` / `ru` → localized error message in response
-- [ ] Deplete several different cards, call `POST /api/payments/test-cards/reset-all` once → every card's balance and status is back to its seed value
-- [ ] `GET /api/payments/test-cards` → returns cards without CVV
-- [ ] Swagger UI accessible at `/api-docs`
+```bash
+# 1. Install dependencies
+npm install
 
+# 2. Setup environment variables
+cp .env.example .env
 
+# 3. Run production server
+npm start
 
+# 4. Run development mode (with --watch auto-reload)
+npm run dev
+```
+
+The server runs by default at `http://localhost:3001`.
+Interactive Swagger UI is available at `http://localhost:3001/api-docs`.
